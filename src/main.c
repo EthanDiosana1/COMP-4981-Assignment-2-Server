@@ -1,88 +1,153 @@
-#include "arguments.h"
-#include "socket_server.h"
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <sys/types.h>
 #include <unistd.h>
 
-#define LOCALHOST "127.0.0.1"
-#define DEFAULT_PORT 8000
+#define PORT_BASE 10
+#define NUM_ARGS 2
+// #define DEFAULT_BACKLOG 5
+#define DEFAULT_BUFFER_SIZE 1024
 
-struct arguments;
-int                   display_usage(void);
-struct socket_server *parse_arguments(int argc, char *argv[]);
-int                   start_server(int argc, char *argv[]);
+/** @brief Displays how to use the program */
+void display_usage(void);
 
-int main(const int argc, char *argv[])
+uint16_t convert_port(const char *port_str);
+
+int start_server(uint16_t port);
+
+int readFrom(int sockfd);
+
+int main(int argc, const char *argv[])
 {
-    // Handle arguments.
+    uint16_t port;    // The port to run on
 
-    // Start the server.
-    start_server(argc, argv);
-
-    return EXIT_SUCCESS;
-}
-
-int start_server(int argc, char *argv[])
-{
-    struct socket_server *server;
-    int                   server_start_status;
-
-    server = parse_arguments(argc, argv);
-
-    server_start_status = start_socket_server(*server);
-
-    // Display error if server failed to start.
-    if(server_start_status != EXIT_SUCCESS)
+    if(argc != NUM_ARGS)
     {
-        perror("Server failed to start.\n");
+        display_usage();
         return EXIT_FAILURE;
     }
 
-    printf("Server started at %s:%d\n", LOCALHOST, DEFAULT_PORT);
+    port = convert_port(argv[1]);
+    printf("port:%hu\n", port);
+
     return EXIT_SUCCESS;
 }
 
-int display_usage(void)
+void display_usage(void)
 {
-    printf("arguments: -i <ip> -p <port>\n");
-    return EXIT_SUCCESS;
+    printf("---SSH CLIENT: SERVER SIDE---\n");
+    printf("./main <port>\n");
 }
 
-struct socket_server *parse_arguments(int argc, char *argv[])
+uint16_t convert_port(const char *port_str)
 {
-    int                   opt;       // the option char
-    uint16_t              port;      // the port
-    char                 *ip;        // the ip
-    struct socket_server *server;    // the server
+    char         *endptr;
+    unsigned long port_ulong;    // The port as an unsigned long
 
-    // If argc < 2, display usage.
-    if(argc < 2)
+    if(port_str == NULL)
     {
-        display_usage();
-        return server;
+        fprintf(stderr, "port_str is null\n");
+        exit(EXIT_FAILURE);
     }
 
-    // Parse the arguments out.
-    while((opt = getopt(argc, argv, "p:i:")) != -1)
+    port_ulong = strtoul(port_str, &endptr, PORT_BASE);
+    //
+    // TODO: error checking
+    // see client version
+
+    return (uint16_t)port_ulong;
+}
+
+int start_server(uint16_t port)
+{
+    int                server_fd;
+    int                client_fd;
+    int                bind_result;    // The result of binding the socket
+    int                listen_result;
+    struct sockaddr_in server_addr;
+    struct sockaddr_in client_addr;
+    socklen_t          client_addr_len;
+    char               buffer[DEFAULT_BUFFER_SIZE];
+    ssize_t            bytes_received;    // The bytes received from the connection
+
+    client_addr_len = sizeof(client_addr);
+
+    // Create the socket
+    server_fd = socket(AF_INET, SOCK_STREAM, 0);
+
+    if(server_fd == -1)
     {
-        if(opt == 'p')
-        {
-            port = (uint16_t)atoi(optarg);
-        }
-
-        if(opt == 'i')
-        {
-            ip = optarg;
-        }
-
-        if(!opt)
-        {
-            break;
-        }
+        fprintf(stderr, "socket creation failed.\n");
+        return EXIT_FAILURE;
     }
 
-    server = (struct socket_server *)malloc(sizeof(struct socket_server));
-    server = (struct socket_server *)create_socket_server_struct(ip, port);
+    // Set up server address
+    memset(&server_addr, 0, sizeof(server_addr));
+    server_addr.sin_family      = AF_INET;
+    server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    server_addr.sin_port        = htons(port);
 
-    return server;
+    // Set up the client address
+    memset(&client_addr, 0, sizeof(client_addr));
+
+    // Bind the socket
+    bind_result = bind(server_fd, (struct sockaddr *)&server_addr, sizeof(server_addr));
+
+    if(bind_result == -1)
+    {
+        fprintf(stderr, "socket bind failed.\n");
+        close(server_fd);
+        return EXIT_FAILURE;
+    }
+
+    // Listen for connections
+    listen_result = listen(server_fd, 1);
+
+    if(listen_result == -1)
+    {
+        fprintf(stderr, "socket listen failed.\n");
+        close(server_fd);
+        return EXIT_FAILURE;
+    }
+
+    printf("Server listening to port %hu...\n", port);
+
+    // Accept incoming connection
+    client_fd = accept(server_fd, (struct sockaddr *)&client_addr, &client_addr_len);
+
+    if(client_fd == -1)
+    {
+        fprintf(stderr, "accept client failed\n");
+        close(server_fd);
+        return EXIT_FAILURE;
+    }
+
+    printf("Connection accepted from %s:%d\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
+
+    // Receive data from the client:
+    while((bytes_received = recv(client_fd, buffer, sizeof(buffer), 0)) > 0)
+    {
+        buffer[bytes_received] = '\0';
+        printf("Received: %s", buffer);
+    }
+
+    if(bytes_received == -1)
+    {
+        fprintf(stderr, "recv failed\n");
+        close(server_fd);
+        return EXIT_FAILURE;
+    }
+
+    // Close the client socket.
+    close(client_fd);
+
+    // Close the server socket.
+    close(server_fd);
+
+    return EXIT_SUCCESS;
 }
