@@ -8,15 +8,14 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#define PORT_BASE 10
+// My libraries
+#include "serverTools.h"
+
 #define NUM_ARGS 2
 // #define DEFAULT_BACKLOG 5
-#define DEFAULT_BUFFER_SIZE 1024
 
 /** @brief Displays how to use the program */
 void display_usage(void);
-
-uint16_t convert_port(const char *port_str);
 
 int start_server(uint16_t port);
 
@@ -46,25 +45,6 @@ void display_usage(void)
     printf("./main <port>\n");
 }
 
-uint16_t convert_port(const char *port_str)
-{
-    char         *endptr;
-    unsigned long port_ulong;    // The port as an unsigned long
-
-    if(port_str == NULL)
-    {
-        fprintf(stderr, "port_str is null\n");
-        exit(EXIT_FAILURE);
-    }
-
-    port_ulong = strtoul(port_str, &endptr, PORT_BASE);
-
-    // TODO: error checking
-    // see client version
-
-    return (uint16_t)port_ulong;
-}
-
 int start_server(uint16_t port)
 {
     int                server_fd;
@@ -74,8 +54,8 @@ int start_server(uint16_t port)
     struct sockaddr_in server_addr;
     struct sockaddr_in client_addr;
     socklen_t          client_addr_len;
-    char               buffer[DEFAULT_BUFFER_SIZE];
     ssize_t            bytes_received;    // The bytes received from the connection
+    ssize_t            message_size;      // The size of the received message.
 
     client_addr_len = sizeof(client_addr);
 
@@ -132,10 +112,61 @@ int start_server(uint16_t port)
     printf("Connection accepted from %s:%d\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
 
     // Receive data from the client:
-    while((bytes_received = recv(client_fd, buffer, sizeof(buffer), 0)) > 0)
+    while(1)
     {
-        buffer[bytes_received] = '\0';
-        printf("Received: %s", buffer);
+        size_t received_size;
+        char  *message;
+
+        bytes_received = recv(client_fd, &message_size, sizeof(ssize_t), 0);
+        if(bytes_received <= 0)
+        {
+            if(bytes_received == 0)
+            {
+                printf("Client disconnected.\n");
+            }
+            else
+            {
+                fprintf(stderr, "recv failed");
+            }
+            break;
+        }
+
+        // Cast ssize_t to size_t
+        received_size = (size_t)bytes_received;
+
+        // Allocate memory for message buffer
+        message = malloc(received_size + 1);
+
+        if(message == NULL)
+        {
+            fprintf(stderr, "Failed to allocate memort for message.\n");
+            free(message);
+            break;
+        }
+
+        // Receive message from client.
+        bytes_received = recv(client_fd, message, (size_t)message_size, 0);
+        if(bytes_received <= 0)
+        {
+            if(bytes_received == 0)
+            {
+                printf("Client disconnected.\n");
+            }
+            else
+            {
+                fprintf(stderr, "recv failed");
+            }
+            free(message);
+            break;
+        }
+
+        // Add null terminator to message
+        message[bytes_received] = '\0';
+
+        // Print the received message
+        printf("Received: %s\n", message);
+
+        free(message);
     }
 
     if(bytes_received == -1)
