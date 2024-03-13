@@ -33,7 +33,9 @@ int main(int argc, const char *argv[])
     }
 
     port = convert_port(argv[1]);
-    printf("port:%hu\n", port);
+    printf("port: %hu\n", port);
+
+    start_server(port);
 
     return EXIT_SUCCESS;
 }
@@ -56,7 +58,7 @@ uint16_t convert_port(const char *port_str)
     }
 
     port_ulong = strtoul(port_str, &endptr, PORT_BASE);
-    //
+
     // TODO: error checking
     // see client version
 
@@ -67,8 +69,8 @@ int start_server(uint16_t port)
 {
     int                server_fd;
     int                client_fd;
-    int                bind_result;    // The result of binding the socket
-    int                listen_result;
+    int                bind_result;      // The result of binding the socket
+    int                listen_result;    // The result of listening for connections
     struct sockaddr_in server_addr;
     struct sockaddr_in client_addr;
     socklen_t          client_addr_len;
