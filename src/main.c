@@ -9,7 +9,10 @@
 #include <unistd.h>
 
 // My libraries
+#include "commands.h"
 #include "serverTools.h"
+
+#define MAX_COMMAND_SIZE 1024
 
 #define NUM_ARGS 2
 // #define DEFAULT_BACKLOG 5
@@ -19,12 +22,23 @@ void display_usage(void);
 
 int start_server(uint16_t port);
 
-int readFrom(int sockfd);
-
+/**
+ * @brief Defines the behavior of a connection
+ * @param client_fd The client socket file descriptor
+ * @param server_fd The server socket file descriptor
+ */
 int handle_connection(int client_fd, int server_fd);
 
+/**
+ * @brief Accepts a single socket connection to the server.
+ * @param server_fd The socket server file descriptor
+ */
 int accept_connection(int server_fd);
 
+/**
+ * @brief Accepts multiple connections using fork()
+ * @param server_fd The socket server file descriptor
+ */
 int accept_connections(int server_fd);
 
 int main(int argc, const char *argv[])
@@ -114,8 +128,10 @@ int handle_connection(int client_fd, int server_fd)
     ssize_t message_size;      // The size of the received message.
     while(1)
     {
-        size_t received_size;
-        char  *message;
+        size_t     received_size;
+        char      *message;
+        const char command[MAX_COMMAND_SIZE];
+        char       output[MAX_COMMAND_SIZE];
 
         bytes_received = recv(client_fd, &message_size, sizeof(ssize_t), 0);
         if(bytes_received <= 0)
@@ -126,7 +142,7 @@ int handle_connection(int client_fd, int server_fd)
             }
             else
             {
-                fprintf(stderr, "recv failed");
+                fprintf(stderr, "recv() failed\n");
             }
             break;
         }
@@ -139,7 +155,7 @@ int handle_connection(int client_fd, int server_fd)
 
         if(message == NULL)
         {
-            fprintf(stderr, "Failed to allocate memort for message.\n");
+            fprintf(stderr, "Failed to allocate memory for message.\n");
             free(message);
             break;
         }
@@ -154,7 +170,7 @@ int handle_connection(int client_fd, int server_fd)
             }
             else
             {
-                fprintf(stderr, "recv failed");
+                fprintf(stderr, "recv() failed\n");
             }
             free(message);
             break;
@@ -165,6 +181,18 @@ int handle_connection(int client_fd, int server_fd)
 
         // Print the received message
         printf("Received: %s\n", message);
+
+        // Execute command locally.
+        if(execute_command(command, output, sizeof(message)) == -1)
+        {
+            fprintf(stderr, "Error executing command: %s\n", message);
+        }
+
+        // Send output back to client.
+        if(send(client_fd, output, strlen(output), 0) == -1)
+        {
+            fprintf(stderr, "send() failed\n");
+        }
 
         free(message);
     }
@@ -222,6 +250,7 @@ int accept_connections(int server_fd)
             close(server_fd);
 
             handle_connection(client_fd, server_fd);
+
             close(client_fd);
         }
 
