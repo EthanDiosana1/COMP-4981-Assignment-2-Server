@@ -21,6 +21,12 @@ int start_server(uint16_t port);
 
 int readFrom(int sockfd);
 
+int handle_connection(int client_fd, int server_fd);
+
+int accept_connection(int server_fd);
+
+int accept_connections(int server_fd);
+
 int main(int argc, const char *argv[])
 {
     uint16_t port;    // The port to run on
@@ -48,16 +54,10 @@ void display_usage(void)
 int start_server(uint16_t port)
 {
     int                server_fd;
-    int                client_fd;
     int                bind_result;      // The result of binding the socket
     int                listen_result;    // The result of listening for connections
     struct sockaddr_in server_addr;
     struct sockaddr_in client_addr;
-    socklen_t          client_addr_len;
-    ssize_t            bytes_received;    // The bytes received from the connection
-    ssize_t            message_size;      // The size of the received message.
-
-    client_addr_len = sizeof(client_addr);
 
     // Create the socket
     server_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -99,19 +99,19 @@ int start_server(uint16_t port)
 
     printf("Server listening to port %hu...\n", port);
 
-    // Accept incoming connection
-    client_fd = accept(server_fd, (struct sockaddr *)&client_addr, &client_addr_len);
+    // Accept incoming connections
+    accept_connections(server_fd);
 
-    if(client_fd == -1)
-    {
-        fprintf(stderr, "accept client failed\n");
-        close(server_fd);
-        return EXIT_FAILURE;
-    }
+    // Close the server socket.
+    close(server_fd);
 
-    printf("Connection accepted from %s:%d\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
+    return EXIT_SUCCESS;
+}
 
-    // Receive data from the client:
+int handle_connection(int client_fd, int server_fd)
+{
+    ssize_t bytes_received;    // The bytes received from the connection
+    ssize_t message_size;      // The size of the received message.
     while(1)
     {
         size_t received_size;
@@ -176,11 +176,59 @@ int start_server(uint16_t port)
         return EXIT_FAILURE;
     }
 
-    // Close the client socket.
-    close(client_fd);
-
-    // Close the server socket.
-    close(server_fd);
-
     return EXIT_SUCCESS;
+}
+
+int accept_connection(int server_fd)
+{
+    int                client_fd;
+    struct sockaddr_in client_addr;
+    socklen_t          client_addr_len;
+
+    memset(&client_addr, 0, sizeof(client_addr));
+    client_addr_len = sizeof(client_addr);
+
+    // Accept an incoming connection
+    client_fd = accept(server_fd, (struct sockaddr *)&client_addr, &client_addr_len);
+    if(client_fd == -1)
+    {
+        fprintf(stderr, "accept() failed\n");
+        return EXIT_FAILURE;
+    }
+
+    printf("Connection accepted from: %s:%hu\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
+
+    return client_fd;
+}
+
+int accept_connections(int server_fd)
+{
+    while(1)
+    {
+        int client_fd;
+        int pid;
+
+        // Accept a single connection
+        client_fd = accept_connection(server_fd);
+        pid       = fork();
+        if(pid == -1)
+        {
+            fprintf(stderr, "fork failed\n");
+            continue;
+        }
+
+        if(pid == 0)
+        {
+            close(server_fd);
+
+            handle_connection(client_fd, server_fd);
+            close(client_fd);
+        }
+
+        else
+        {
+            // Close client socket in parent process.
+            close(client_fd);
+        }
+    }
 }
