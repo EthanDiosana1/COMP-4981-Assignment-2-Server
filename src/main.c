@@ -25,9 +25,8 @@ int start_server(uint16_t port);
 /**
  * @brief Defines the behavior of a connection
  * @param client_fd The client socket file descriptor
- * @param server_fd The server socket file descriptor
  */
-int handle_connection(int client_fd, int server_fd);
+int handle_connection(int client_fd);
 
 /**
  * @brief Accepts a single socket connection to the server.
@@ -40,6 +39,14 @@ int accept_connection(int server_fd);
  * @param server_fd The socket server file descriptor
  */
 int accept_connections(int server_fd);
+
+/**
+ * @brief Receives a message from the client.
+ * @param client_fd the file descriptor of the client socket
+ * @param message the message buffer
+ * @param message_size the expected size of the message
+ */
+int receive_message(int client_fd, char **message, ssize_t message_size);
 
 int main(int argc, const char *argv[])
 {
@@ -122,87 +129,86 @@ int start_server(uint16_t port)
     return EXIT_SUCCESS;
 }
 
-int handle_connection(int client_fd, int server_fd)
+int receive_message(int client_fd, char **message, ssize_t message_size)
 {
-    ssize_t bytes_received;    // The bytes received from the connection
-    ssize_t message_size;      // The size of the received message.
-    while(1)
+    ssize_t bytes_received;
+
+    // Receive the message size
+    bytes_received = recv(client_fd, &message_size, sizeof(ssize_t), 0);
+    if(bytes_received <= 0)
     {
-        size_t     received_size;
-        char      *message;
-        const char command[MAX_COMMAND_SIZE];
-        char       output[MAX_COMMAND_SIZE];
-
-        bytes_received = recv(client_fd, &message_size, sizeof(ssize_t), 0);
-        if(bytes_received <= 0)
+        // Handle client disconnect
+        if(bytes_received == 0)
         {
-            if(bytes_received == 0)
-            {
-                printf("Client disconnected.\n");
-            }
-            else
-            {
-                fprintf(stderr, "recv() failed\n");
-            }
-            break;
+            printf("Client disconnected.\n");
         }
-
-        // Cast ssize_t to size_t
-        received_size = (size_t)bytes_received;
-
-        // Allocate memory for message buffer
-        message = malloc(received_size + 1);
-
-        if(message == NULL)
+        else
         {
-            fprintf(stderr, "Failed to allocate memory for message.\n");
-            free(message);
-            break;
+            fprintf(stderr, "recv() failed\n");
         }
-
-        // Receive message from client.
-        bytes_received = recv(client_fd, message, (size_t)message_size, 0);
-        if(bytes_received <= 0)
-        {
-            if(bytes_received == 0)
-            {
-                printf("Client disconnected.\n");
-            }
-            else
-            {
-                fprintf(stderr, "recv() failed\n");
-            }
-            free(message);
-            break;
-        }
-
-        // Add null terminator to message
-        message[bytes_received] = '\0';
-
-        // Print the received message
-        printf("Received: %s\n", message);
-
-        // Execute command locally.
-        if(execute_command(command, output, sizeof(message)) == -1)
-        {
-            fprintf(stderr, "Error executing command: %s\n", message);
-        }
-
-        // Send output back to client.
-        if(send(client_fd, output, strlen(output), 0) == -1)
-        {
-            fprintf(stderr, "send() failed\n");
-        }
-
-        free(message);
     }
 
-    if(bytes_received == -1)
+    // Allocate memory for message buffer
+    *message = malloc((size_t)(message_size) + 1);
+
+    if(*message == NULL)
     {
-        fprintf(stderr, "recv failed\n");
-        close(server_fd);
+        fprintf(stderr, "Failed to allocate memory for message.\n");
         return EXIT_FAILURE;
     }
+
+    // Receive message from client.
+    bytes_received = recv(client_fd, message, (size_t)message_size, 0);
+    if(bytes_received <= 0)
+    {
+        if(bytes_received == 0)
+        {
+            printf("Client disconnected.\n");
+        }
+        else
+        {
+            fprintf(stderr, "recv() failed\n");
+        }
+        free(*message);
+        return EXIT_FAILURE;
+    }
+
+    // Add null terminator to message
+    (*message)[bytes_received] = '\0';
+
+    return EXIT_SUCCESS;
+}
+
+int handle_connection(int client_fd)
+{
+    char   *message = NULL;
+    char    output[MAX_COMMAND_SIZE];
+    ssize_t message_size = 0;
+
+    if(receive_message(client_fd, &message, message_size) == EXIT_FAILURE)
+    {
+        fprintf(stderr, "receive_message() failed\n");
+        return EXIT_FAILURE;
+    }
+
+    // Print the received message
+    printf("Received: %s\n", message);
+
+    // Execute command locally
+    if(execute_command(message, output, sizeof(output)) == -1)
+    {
+        fprintf(stderr, "Error executing command: %s\n", message);
+    }
+
+    // Send output back to client
+    if(send(client_fd, output, strlen(output), 0) == -1)
+    {
+        fprintf(stderr, "send() failed\n");
+        free(message);
+        return EXIT_FAILURE;
+    }
+
+    free(message);
 
     return EXIT_SUCCESS;
 }
@@ -238,26 +244,46 @@ int accept_connections(int server_fd)
 
         // Accept a single connection
         client_fd = accept_connection(server_fd);
-        pid       = fork();
-        if(pid == -1)
+
+        // Skip if connection failed
+        if(client_fd == EXIT_FAILURE)
         {
-            fprintf(stderr, "fork failed\n");
+            fprintf(stderr, "accept_connection() failed\n");
             continue;
         }
 
+        // Create a child process to handle
+        // the connection
+        pid = fork();
+
+        // Skip if child fork failed
+        if(pid == -1)
+        {
+            fprintf(stderr, "fork() failed\n");
+            close(client_fd);
+            continue;
+        }
+
+        // Handle connection in child process
         if(pid == 0)
         {
+            // Child process
             close(server_fd);
-
-            handle_connection(client_fd, server_fd);
-
+            if(handle_connection(client_fd) == EXIT_FAILURE)
+            {
+                fprintf(stderr, "handle_connection() failed\n");
+            }
             close(client_fd);
+            exit(EXIT_SUCCESS);
         }
 
+        // Close connection in parent process
         else
         {
-            // Close client socket in parent process.
+            // Parent process
             close(client_fd);
         }
+
+        return EXIT_SUCCESS;
     }
 }

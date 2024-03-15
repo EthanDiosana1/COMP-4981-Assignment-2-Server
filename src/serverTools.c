@@ -1,4 +1,5 @@
 #include "serverTools.h"
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -33,4 +34,32 @@ uint16_t convert_port(const char *port_str)
     }
 
     return (uint16_t)port_ulong;
+}
+
+int send_message_size(int client_fd, size_t message_size)
+{
+    if(send(client_fd, &message_size, sizeof(size_t), 0) == -1)
+    {
+        fprintf(stderr, "send() failed\n");
+        return EXIT_FAILURE;
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int send_message(int client_fd, const char *buffer, size_t message_size)
+{
+    if(buffer == NULL)
+    {
+        fprintf(stderr, "buffer is null\n");
+        return EXIT_FAILURE;
+    }
+
+    if(send(client_fd, buffer, message_size, 0) == -1)
+    {
+        fprintf(stderr, "send() failed\n");
+        return EXIT_FAILURE;
+    }
+
+    return EXIT_SUCCESS;
 }

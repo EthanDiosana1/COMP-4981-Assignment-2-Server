@@ -13,10 +13,11 @@ int execute_command(const char *command, char *output, size_t output_size)
     int     status;
     ssize_t bytes_read;
 
-    // Create pipe
+    // Create pipe to communicate with
+    // the child process
     if(pipe2(pipefd, O_CLOEXEC) == -1)
     {
-        perror("pipe");
+        fprintf(stderr, "pipe2() failed");
         return EXIT_FAILURE;
     }
 
@@ -24,10 +25,12 @@ int execute_command(const char *command, char *output, size_t output_size)
     pid = fork();
     if(pid == -1)
     {
-        perror("fork");
+        fprintf(stderr, "fork() failed\n");
     }
     else if(pid == 0)
-    {    // Child process
+    {
+        // Child process
+
         // Close read end of the pipe
         close(pipefd[0]);
 
@@ -40,7 +43,7 @@ int execute_command(const char *command, char *output, size_t output_size)
         // Execute command
         if(execl("/bin/sh", "sh", "-c", command, NULL) == -1)
         {
-            perror("execl");
+            fprintf(stderr, "execl() failed");
             // Exit child process with failure
             exit(EXIT_FAILURE);
         }
