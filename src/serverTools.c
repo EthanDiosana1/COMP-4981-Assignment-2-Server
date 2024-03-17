@@ -5,6 +5,9 @@
 #include <string.h>
 
 #define PORT_BASE 10
+#define IP_BASE 10
+#define IP_MAX 255
+#define IP_MAX_CHARS 16
 
 uint16_t convert_port(const char *port_str)
 {
@@ -35,6 +38,42 @@ uint16_t convert_port(const char *port_str)
     }
 
     return (uint16_t)port_ulong;
+}
+
+bool isValidIp(const char *ip)
+{
+    const char *token;
+    char       *saveptr;
+    char        ip_copy[IP_MAX_CHARS];
+    int         count;
+
+    // Spit the IP into four parts.
+    strlcpy(ip_copy, ip, IP_MAX_CHARS);
+    count = 0;
+    token = strtok_r(ip_copy, ".", &saveptr);
+    while(token != NULL)
+    {
+        char *endptr;
+        long  num;
+        count++;
+        num = strtol(token, &endptr, IP_BASE);
+
+        if(*endptr != '\0' || num < 0 || num > IP_MAX)
+        {
+            fprintf(stderr, "Invalid ip address\n");
+            return false;
+        }
+
+        token = strtok_r(NULL, ".", &saveptr);
+    }
+
+    // Return if the address has exactly four parts
+    if(count != 4)
+    {
+        return false;
+    }
+
+    return true;
 }
 
 int send_message_size(int client_fd, size_t message_size)
