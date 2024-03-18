@@ -1,0 +1,3 @@
+main src/main.c include/serverTools.h src/serverTools.c include/commands.h src/commands.c include/socketSSHServer.h src/socketSSHServer.c 
+
+sdf'dslfmds;lkf
