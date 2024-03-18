@@ -34,9 +34,10 @@ int main(int argc, const char *argv[])
 
     printf("Inputted IP: %s\n", ip);
 
-    if(!isValidIp(ip))
+    if(!is_valid_ip(ip))
     {
         fprintf(stderr, "invalid IP address\n");
+        display_usage();
         return EXIT_FAILURE;
     }
 

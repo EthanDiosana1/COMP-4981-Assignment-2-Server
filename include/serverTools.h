@@ -15,7 +15,7 @@ uint16_t convert_port(const char *port_str);
  * @brief Returns true if the given ip is a valid IP address
  * @param ip the string to test
  */
-bool isValidIp(const char *ip);
+bool is_valid_ip(const char *ip);
 
 /**
  * @brief Sends a message to a socket.

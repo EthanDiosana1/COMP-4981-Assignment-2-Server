@@ -40,7 +40,7 @@ uint16_t convert_port(const char *port_str)
     return (uint16_t)port_ulong;
 }
 
-bool isValidIp(const char *ip)
+bool is_valid_ip(const char *ip)
 {
     const char *token;
     char       *saveptr;
@@ -60,7 +60,6 @@ bool isValidIp(const char *ip)
 
         if(*endptr != '\0' || num < 0 || num > IP_MAX)
         {
-            fprintf(stderr, "Invalid ip address\n");
             return false;
         }
 
