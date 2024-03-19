@@ -10,6 +10,7 @@
 
 #define MAX_COMMAND_SIZE 1024
 #define COMMAND_FAILED_MESSAGE "command failed"
+#define NO_OUTPUT_MESSAGE "no output"
 
 #include "commands.h"
 #include "serverTools.h"
@@ -176,19 +177,23 @@ int handle_connection(int client_fd)
         if(execute_command(message, output, sizeof(output)) == EXIT_FAILURE)
         {
             fprintf(stderr, "Error executing command: %s\n", message);
-            printf("Output: \"%s\"\n", output);
             strncpy(output, COMMAND_FAILED_MESSAGE, strlen(COMMAND_FAILED_MESSAGE));
+        }
+
+        if(strlen(output) == 0)
+        {
+            strncpy(output, NO_OUTPUT_MESSAGE, strlen(NO_OUTPUT_MESSAGE));
         }
 
         // Send output back to client
         if(send_message(client_fd, output) == EXIT_FAILURE)
         {
             fprintf(stderr, "send() failed\n");
-            free(message);
-            return EXIT_FAILURE;
+            strncpy(output, NO_OUTPUT_MESSAGE, strlen(NO_OUTPUT_MESSAGE));
         }
 
         free(message);
+        printf("Output: \"%s\"\n", output);
         printf("----- CLIENT REQUEST END -----\n\n");
     }
 }
