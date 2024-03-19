@@ -9,6 +9,7 @@
 #include <sys/types.h>
 
 #define MAX_COMMAND_SIZE 1024
+#define COMMAND_FAILED_MESSAGE "command failed"
 
 #include "commands.h"
 #include "serverTools.h"
@@ -158,7 +159,7 @@ int handle_connection(int client_fd)
         char    output[MAX_COMMAND_SIZE];
         ssize_t message_size = 0;
 
-        printf("----- LISTENING FOR CLIENT INPUT -----\n");
+        printf("\n----- LISTENING FOR CLIENT INPUT -----\n");
 
         if(receive_message(client_fd, &message, message_size) == EXIT_FAILURE)
         {
@@ -166,7 +167,7 @@ int handle_connection(int client_fd)
             return EXIT_FAILURE;
         }
 
-        printf("----- CLIENT REQUEST START -----\n");
+        printf("\n----- CLIENT REQUEST START -----\n");
 
         // Print the received message
         printf("Received: %s\n", message);
@@ -175,6 +176,8 @@ int handle_connection(int client_fd)
         if(execute_command(message, output, sizeof(output)) == EXIT_FAILURE)
         {
             fprintf(stderr, "Error executing command: %s\n", message);
+            printf("Output: \"%s\"\n", output);
+            strncpy(output, COMMAND_FAILED_MESSAGE, strlen(COMMAND_FAILED_MESSAGE));
         }
 
         // Send output back to client

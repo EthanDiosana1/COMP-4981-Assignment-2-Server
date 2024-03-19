@@ -43,13 +43,13 @@ int execute_command(const char *command, char *output, size_t output_size)
         // Execute command
         if(execl("/bin/sh", "sh", "-c", command, NULL) == -1)
         {
-            fprintf(stderr, "execl() failed");
             // Exit child process with failure
-            exit(EXIT_FAILURE);
+            return EXIT_FAILURE;
         }
     }
     else
-    {    // Parent process
+    {
+        // Parent process
         // Close write end of the pipe
         close(pipefd[1]);
 
