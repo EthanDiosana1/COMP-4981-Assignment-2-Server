@@ -177,11 +177,20 @@ int handle_connection(int client_fd)
         if(execute_command(message, output, sizeof(output)) == EXIT_FAILURE)
         {
             fprintf(stderr, "Error executing command: %s\n", message);
+            // clear the buffer
+            memset(output, '\0', sizeof(output));
+
+            // set the output message as an error message
             strncpy(output, COMMAND_FAILED_MESSAGE, strlen(COMMAND_FAILED_MESSAGE));
         }
 
-        if(strlen(output) == 0)
+        // else if no output, paste in no output
+        else if(strlen(output) == 0)
         {
+            // clear the buffer
+            memset(output, '\0', sizeof(output));
+
+            // set the output message as an error message
             strncpy(output, NO_OUTPUT_MESSAGE, strlen(NO_OUTPUT_MESSAGE));
         }
 
@@ -189,6 +198,10 @@ int handle_connection(int client_fd)
         if(send_message(client_fd, output) == EXIT_FAILURE)
         {
             fprintf(stderr, "send() failed\n");
+            // clear the buffer
+            memset(output, '\0', sizeof(output));
+
+            // set the output message as an error message
             strncpy(output, NO_OUTPUT_MESSAGE, strlen(NO_OUTPUT_MESSAGE));
         }
 
